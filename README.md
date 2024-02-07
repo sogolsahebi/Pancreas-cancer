@@ -1,4 +1,4 @@
-# Pancreas-cancer
+
 # Pancreatic Cancer Analysis
 
 This repository contains analysis pipelines and data processing scripts for pancreatic cancer, incorporating datasets from the CIA, TCGA (The Cancer Genome Atlas), and ICGA (International Cancer Genome Consortium). The project aims to facilitate a comprehensive analysis of pancreatic cancer through various bioinformatics techniques.
