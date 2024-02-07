@@ -1,7 +1,7 @@
 
 # Pancreatic Cancer Analysis
 
-This repository is focused on pancreatic cancer, including datasets from CIA, TCGA, and ICGA
+This repository contains analysis data processing  and data preprocessing scripts for pancreatic cancer, incorporating datasets from the CIA, TCGA  and ICGA.
 
 ## Datasets
 
