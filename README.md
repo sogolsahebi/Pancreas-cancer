@@ -9,7 +9,7 @@ This repository contains analysis data processing  and data preprocessing script
 - **TCGA**: [Description of the TCGA dataset]
 - **ICGA**: [Description of the ]
 
-## Steps
+### Steps
 
 1. Preprocessing data: Creating SE objects
 2. Descriptive analysis
