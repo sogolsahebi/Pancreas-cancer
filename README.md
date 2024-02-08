@@ -11,12 +11,10 @@ This repository contains analysis data processing  and data preprocessing script
 
 ### Steps
 
-1. Preprocessing data: Creating SE objects
-2. Descriptive analysis
-3. Differential gene expression analysis
-4. Pathway analysis
-5. RNA Signature analysis
-6. Tentative - Multivariable analysis
+1. Differential gene expression analysis
+2. Pathway analysis
+3. RNA Signature analysis
+4. Tentative - Multivariable analysis
 
 
 
