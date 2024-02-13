@@ -1,19 +1,11 @@
 # Format_TCGA.R
 
-# This script is for creating the SE_TCGA.rds file.
+# This script is for creating the SE_TCGA.rds file: 120 samples and 18416 genes
 
-# Purpose: Create the SE_TCGA.rds file, integrating clinical, expression, and annotation data.
-
-# Input Data Specifications:
+# Input Data Specifications for tcga SE obj :
 # - tcga_clin: Initial dimensions of 146 x 11 (clinical data)
 # - tcga_expr: Initial dimensions of 20,501 x 146 (expression data)
-# - t_annot: Initial dimensions of 20,501 x 4 (annotation data)
-
-# Output Data Specifications:
-# - SE_TCGA: A SummarizedExperiment object containing:
-#   - Clinical data with dimensions of 120 x 24
-#   - Expression data with dimensions of 20,501 x 120
-#   - Annotation data with dimensions of 20,501 x 4
+# - separate_clin_tcga: Initial dimensions of 148 x 16 (train_tune_with_quantile.csv)
 
 # Load necessary libraries
 library(SummarizedExperiment)
@@ -27,7 +19,6 @@ tcga_se <- pancreasData[[1]]$TCGA_SumExp
 # Access clinical, expression, and annotation data respectively
 tcga_clin <- data.frame(colData(tcga_se))
 tcga_expr <- assays(tcga_se)[["exprs"]]
-tcga_annot <- data.frame(rowData(tcga_se))
 
 # Load and preprocess external clinical data
 separate_clin <- read.csv("files/train_tune_with_quantile.csv")
@@ -36,7 +27,7 @@ separate_clin <- read.csv("files/train_tune_with_quantile.csv")
 separate_clin_tcga <- separate_clin[separate_clin$cohort == "tcga",] # dim 148 x 16
 
 # Rename the same column names for accuracy
-colnames(separate_clin_tcga)[colnames(separate_clin_tcga) %in% c("grade", "age", "sex")] <- c("grade2", "age2", "sex2")
+colnames(separate_clin_tcga)[colnames(separate_clin_tcga) %in% c("grade", "age", "sex")] <- c("grade_pathology", "age_pathology", "sex_pathology")
 
 # Replace hyphens with underscores in slide_id
 separate_clin_tcga$slide_id <- gsub("-", "_", separate_clin_tcga$slide_id)
@@ -48,20 +39,13 @@ separate_clin_tcga$slide_id <- gsub("_.{3}$", "", separate_clin_tcga$slide_id)
 merged_clin <- merge(tcga_clin, separate_clin_tcga, by.x = "unique_patient_ID", by.y = "slide_id") # dim 120 x 26
 
 # Identical age column, so remove the extra one
-if(identical(merged_clin$age, merged_clin$age2)) merged_clin$age2 <- NULL
+merged_clin$age_pathology <- NULL
 
-# TODO: The stage, stage2 are not the same; mismatch happening.
-View(merged_clin[, c("grade", "grade2")])
+# Note: The stage, stage_pathology are differnt 
+# View(merged_clin[, c("grade", "grade_pathology")])
 
-# Replace "female" with "F" and "male" with "M" in sex2 column
-merged_clin$sex2[merged_clin$sex2 == "female"] <- "F"
-merged_clin$sex2[merged_clin$sex2 == "male"] <- "M"
-
-# Convert sex2 to factor with specified levels
-merged_clin$sex2 <- factor(merged_clin$sex2, levels = c("F", "M"))
-
-# If 'sex' and 'sex2' are identical, remove 'sex2'
-if(identical(merged_clin$sex, merged_clin$sex2)) merged_clin$sex2 <- NULL
+# Columns 'sex' and 'sex_pathology' are identical, remove 'sex2'
+merged_clin$sex_pathology <- NULL
 
 # Harmonize column names format in tcga_expr to match merged_clin IDs
 colnames(tcga_expr) <- gsub("\\.", "_", colnames(tcga_expr))
@@ -69,20 +53,33 @@ colnames(tcga_expr) <- gsub("\\.", "_", colnames(tcga_expr))
 # Filter columns of tcga_expr based on merged_clin$unique_patient_ID
 tcga_expr <- tcga_expr[, colnames(tcga_expr) %in% merged_clin$unique_patient_ID]
 
-# TODO: There are 1560 NA values in expression data. Consider addressing these.
-sum(is.na(tcga_expr))
+# Remove rows with all NA values
+tcga_expr_cleaned <- tcga_expr[!apply(tcga_expr, 1, function(x) all(is.na(x))), ] #13 rows removed
 
 # Double-check the range of expression values
 range(tcga_expr, na.rm = TRUE) # 0.00000 to 22.62807
 
-# TODO: I use Gencode19 version results in the loss of 18416 genes. 
-gencode_file <- "~/BHK lab/Annotation/Gencode.v19.annotation.RData"
-load(gencode_file)
+# Gencode19 version si used for annotation                  
+load("~/BHK lab/Annotation/Gencode.v19.annotation.RData")
 features_df <- features_gene
 
+# Remove Duplicated Gene Names
+features_df <- features_df[!duplicated(features_df$gene_name), ]
+
+# Filter and Order Assay Data
+assay <- tcga_expr[rownames(tcga_expr) %in% features_df$gene_name, ]   # dimension 18416 x 120 
+assay <- assay[order(rownames(assay)), ]
+ 
+# Prepare Row Data for SummarizedExperiment
+assay_genes <- features_df[features_df$gene_name %in% rownames(assay), ]
+assay_genes$gene_id_no_ver <- gsub("\\..*$", "", assay_genes$gene_id)
+assay_genes <- assay_genes[!is.na(assay_genes$start), ]
+rownames(assay_genes) <- assay_genes$gene_name
+assay_genes <- assay_genes[order(rownames(assay_genes)), ]    # dimension 18416 x 120
+
 # Create a SummarizedExperiment object for TCGA
-tcga_se_result <- SummarizedExperiment(assays = list(exprs = tcga_expr), colData = merged_clin, rowData = DataFrame(tcga_annot))
+tcga_se <- SummarizedExperiment(assays = list("gene_expression" = assay), colData = merged_clin, rowData = assay_genes)
 
 # Save the SummarizedExperiment object
-saveRDS(tcga_se_result, "output data/SE_TCGA.rds")
+saveRDS(tcga_se, "output data/SE_TCGA.rds")
 
