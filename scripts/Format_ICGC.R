@@ -71,4 +71,3 @@ icgca_se <- SummarizedExperiment(assays = list("gene_expression" = assay), colDa
 
 # Save the SummarizedExperiment object
 saveRDS(icgca_se , "output data/SE_ICGCA.rds")
-
