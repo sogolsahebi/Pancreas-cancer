@@ -111,7 +111,7 @@ DT::datatable(data.frame(round(data.frame(top.table),3)))
 
 # Save top table to .txt file.
 top.table$Gene <- rownames(top.table)
-write.table(top.table, file = "~/BHK lab/kevin Project/Cholangiocarcinoma/output data/Limma_Fit.txt", row.names = F, sep = "\t", quote = F)
+write.table(top.table, file = "~/BHK lab/Pancreas-cancer/output data/CIA_Limma_Fit.txt", row.names = F, sep = "\t", quote = F)
 
 ```
 
