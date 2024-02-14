@@ -40,7 +40,7 @@ expr <- expr[, colnames(expr) %in% clin$slide_id] # dim 58387 x 50
 # Set expr rownames
 rownames(expr) <- gene_row
 
-# Use Gencode version 19 to add annot  (31614)
+# Use Gencode version 19 to add annot 
 load("~/BHK lab/Annotation/Gencode.v19.annotation.RData")
 features_df <- features_gene
 
