@@ -1,0 +1,116 @@
+---
+title: "CIA_Analysis"
+author: "Nasim Bondar Sahebi"
+date: "2024-02-13"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+## Load Libraries
+
+```{r  load libraries}
+library(SummarizedExperiment)
+library(EnhancedVolcano)
+```
+
+
+## Data Loading and Preparation
+
+#### Data Overview
+
+  - **dataset name **:  CIA
+  - **Patient samples **: 50 
+  - **RNA sequencing (RNA-seq)**: 50 patients, 51627 genes.
+  - **LOW **:  43 patients
+  - **HIGH **:  7 patients
+  
+  
+Load the Summarized Experiment data object, extract clinical information, log-transformed FPKM expression data, along with annotations. Prepare the gene expression data for analysis.
+
+```{r summery load-data}
+
+# Load your SE result and extract clinical data , expression data and annotation
+
+# Load SE obj
+se <- readRDS("~/BHK lab/Pancreas-cancer/output data/SE_CIA.rds")
+
+# Extract Clinical data 
+clin <- data.frame(colData(se)) #dim is 50 x 16
+
+# Extract the expression data
+expr_fpkm <- assays(se)[["gene_expression"]] #dim 51627 x 50
+
+# Extract the annotation
+annot <- data.frame(rowData(se))  #dim is 51627 x 15
+
+# Display first few rows of the dataset
+DT::datatable(round(expr_fpkm[1:8, 1:7], 3)) 
+
+```
+
+## Data Preparation 
+
+Preparing expression data (RNA-seq) for analysis:
+
+1. Restrict expression data to protein-coding genes.
+2. Remove low/zero expression genes.
+
+Total 17354 genes remain for downstream analyses. 
+
+```{r Data Preparation }
+
+# Step 1: Restrict to Protein-Coding Genes.
+annot_proteincoding <- annot[annot$gene_type == "protein_coding",] # 19477 protein coding genes.
+expr_fpkm<- expr_fpkm[rownames(expr_fpkm) %in% rownames(annot_proteincoding),]
+dim(expr_fpkm)
+
+# Step 2: Filter Low/Zero Expression Genes]
+
+#data is log2(TPM+1)
+r <- as.numeric(apply(expr_fpkm, 1, function(i) sum(round(i, 6) == round(log2(1), 6))))
+
+# Get the indices of rows to remove
+remove <- which(r > dim(expr_fpkm)[2] * 0.5) 
+
+# Remove rows from the matrix
+expr_fpkm <- expr_fpkm[-remove, ]   #dim is 17354 x 50
+
+DT::datatable(round(expr_fpkm[1:8, 1:8], 3))
+```
+
+
+## Differential gene expression.
+
+  - **Use limma approach in R **: To find the differentially expressed genes between LOW and HIGH.
+  - **P-values are corrected to control false discovery rate (FDR)** using Benjamini-Hochberg approach 
+  - **out put:** CIA_Limma_Fit.txt file
+  
+result: only one DE genes
+  
+```{r diff expression }
+
+# Limma approach applied.
+design <- model.matrix(~ clin$low_high)
+fit <- lmFit(expr_fpkm, design)
+fit <- eBayes(fit)
+
+# Sort by Pvalue.
+top.table <- topTable(fit, sort.by = "P", n = Inf)
+
+# To see How many DE gene are there.
+length(which(top.table$adj.P.Val < 0.05))  # only one DE genes.
+
+# Preview
+DT::datatable(data.frame(round(data.frame(top.table),3)))
+
+# Save top table to .txt file.
+top.table$Gene <- rownames(top.table)
+write.table(top.table, file = "~/BHK lab/kevin Project/Cholangiocarcinoma/output data/Limma_Fit.txt", row.names = F, sep = "\t", quote = F)
+
+```
+
