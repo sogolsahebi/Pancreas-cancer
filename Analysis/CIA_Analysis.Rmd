@@ -16,6 +16,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```{r  load libraries}
 library(SummarizedExperiment)
 library(EnhancedVolcano)
+library(limma)
 ```
 
 
@@ -114,3 +115,37 @@ write.table(top.table, file = "~/BHK lab/kevin Project/Cholangiocarcinoma/output
 
 ```
 
+- **Volcano Plot:** based on P value and FDR
+
+```{r  Volcano plot libraries,fig.width=10, fig.height=10}
+
+
+# 1. Volcano plot.
+
+# 1.1 Volcano Plot based on P value
+EnhancedVolcano(top.table,
+    lab = rownames(top.table),
+    x = 'logFC',
+    y = 'P.Value',
+    pCutoff = 0.05,
+    FCcutoff = 1.5,
+    xlim = c(-5, 5),
+    ylim = c(0, -log10(10e-4)),
+    title= 'Volcano Plot based on P value'
+    )
+
+# 1.2 Volcano Plot based on FDR 
+# adjusted p-values as red 
+EnhancedVolcano(top.table,
+    lab = rownames(top.table),
+    x = 'logFC',
+    y = 'adj.P.Val',
+    pCutoff = 0.05,
+    FCcutoff = 1.5,
+    xlim = c(-5, 5),
+    ylim = c(0, -log10(10e-4)),
+    legendLabels=c('Not sig.','Log FC','adj p-value',
+      'adj p-value & Log FC'),
+    title= 'Volcano Plot based on FDR',)
+
+```
