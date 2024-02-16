@@ -1,10 +1,10 @@
 # Format_ICGC.R
 
-# This script is for creating the SE_TCGA.rds file: 19 samples and 15051 genes
+# This script is for creating the SE_TCGA.rds file: 39 samples and 20215 genes
 
 # Input Data Specifications for tcga SE obj :
-# - icgc_clin: Initial dimensions of 95 x 11 (clinical data)
-# - icgc_expr: Initial dimensions of 15965 x 95 (expression data)
+# - icgc_clin: Initial dimensions of 265 x 11 (clinical data)
+# - icgc_expr: Initial dimensions of 21701 x 265 (expression data)
 # - separate_clin_icgc: Initial dimensions of 217 x 14 (icgc_clinical.csv)
 # - separate_clin_quantile: Initial dimensions of 257  16 (train_tune_with_quantile.csv)
 
@@ -15,11 +15,11 @@ library(SummarizedExperiment)
 load("~/BHK lab/Pancreas-cancer/files/panc.rda")
 
 # Access the TCGA SummarizedExperiment object
-icgc_se <- pancreasData[[1]]$ICGCSEQ_SumExp
+icgc_se <- pancreasData[[1]]$ICGCMICRO_SumExp
 
 # Access clinical, expression, and annotation data respectively
-icgc_clin <- data.frame(colData(icgc_se))   # dim 95 x 11
-icgc_expr <- assays(icgc_se)[["exprs"]]     # dim 15965 x 95
+icgc_clin <- data.frame(colData(icgc_se))   # dim 265 x 11
+icgc_expr <- assays(icgc_se)[["exprs"]]     # dim 21701 x 265
 
 # Load and preprocess external two clinical data
 separate_clin_icgc <- read.csv("files/icgc_clinical.csv") # dimension 217 x 14
@@ -35,7 +35,53 @@ separate_clin_icgc$slide_id <- paste(separate_clin_icgc$patient_id, separate_cli
 # merged "separate_clin_icgc" and "separate_clin_quantile" based on slide_id
 merged_clin <- merge(separate_clin_icgc, separate_clin_quantile, by = "slide_id")   # dim 51 x 30
 
-length(intersect(merged_clin$icgc_id, colnames(icgc_expr))) # 4 patient matching!
+# Identical age column, so remove the extra one
+merged_clin$sex.y <- NULL
+merged_clin$grade.y <- NULL
+colnames(merged_clin)[colnames(merged_clin) == "sex.x"] <- "sex"
+colnames(merged_clin)[colnames(merged_clin) == "grade.x"] <- "grade"
 
-#### only 4 patient matching ####
+# merged with 'icgc_clin' we end up having 39 patients.
+merged_clin <- merge(icgc_clin,merged_clin, by.x= "unique_patient_ID", by.y = "icgc_id")
+merged_clin <- merged_clin[!duplicated(merged_clin$unique_patient_ID), ] # dim 39 x 38
+
+# Identical age column, so remove the extra one
+merged_clin$sex.y <- NULL
+merged_clin$age.y <- NULL
+colnames(merged_clin)[colnames(merged_clin) == "sex.x"] <- "sex"
+colnames(merged_clin)[colnames(merged_clin) == "age.x"] <- "age"
+
+#Rename columns since garde columns are not identical
+colnames(merged_clin)[colnames(merged_clin) == "grade.x"] <- "grade"
+colnames(merged_clin)[colnames(merged_clin) == "grade.y"] <- "grade_pathology"
+
+# expression is log2-transformed and quantile normalized as expression data
+range(icgc_expr) #1.022189 14.092020
+
+# Filter columns of tcga_expr based on merged_clin$unique_patient_ID
+icgc_expr <- icgc_expr[, colnames(icgc_expr) %in% merged_clin$unique_patient_ID] # dim 21701 x 39
+
+# Gencode19 version si used for annotation                  
+load("~/BHK lab/Annotation/Gencode.v19.annotation.RData")
+features_df <- features_gene
+
+# Remove Duplicated Gene Names
+features_df <- features_df[!duplicated(features_df$gene_name), ]
+
+# Filter and Order Assay Data
+assay <- icgc_expr[rownames(icgc_expr) %in% features_df$gene_name, ]   # dim 20215 x 39 
+assay <- assay[order(rownames(assay)), ]
+
+# Prepare Row Data for SummarizedExperiment
+assay_genes <- features_df[features_df$gene_name %in% rownames(assay), ]
+assay_genes$gene_id_no_ver <- gsub("\\..*$", "", assay_genes$gene_id)
+assay_genes <- assay_genes[!is.na(assay_genes$start), ]
+rownames(assay_genes) <- assay_genes$gene_name
+assay_genes <- assay_genes[order(rownames(assay_genes)), ]    # dim 20215 x 15
+
+# Create a SummarizedExperiment object for TCGA
+icgc <- SummarizedExperiment(assays = list("gene_expression" = assay), colData = merged_clin, rowData = assay_genes)
+
+# Save the SummarizedExperiment object
+saveRDS(icgc, "output data/SE_ICGC.rds")
 
