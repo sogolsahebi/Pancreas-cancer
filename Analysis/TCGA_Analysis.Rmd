@@ -14,8 +14,17 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 ```{r  load libraries}
 library(SummarizedExperiment)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(DT)
 library(limma)
 library(EnhancedVolcano)
+library(fgsea)
+library(msigdbr)
+library(gage)
+library(pathview)
+library(BiocParallel)
 ```
 
 
@@ -154,4 +163,165 @@ EnhancedVolcano(top.table,
     title= 'Volcano Plot based on FDR',)
 
 ```
+## MSigDB Pathway analysis
+
+- To Identify the associated pathways or genes sets.
+- Downloaded hallmark(H) , KEGG gene sets from [ MSigDB website](https://www.gsea-msigdb.org/gsea/msigdb/human/collections.jsp#H).
+- Conduct GSEA with the fgsea package using "top.table" from step 2.
+
+## Hallmark Geneset.
+
+```{r  Create Rank and Bar pot}
+
+# Load gene sets from a GMT file for pathway analysis
+pathwaysH <- gmtPathways("~/BHK lab/Pancreas-cancer/GSEA/h.all.v2023.2.Hs.symbols.gmt")
+
+# 1. Create ranks
+
+# Create 'ranks' vector from 'top.table' with logFC as values and gene names as names.
+ranks <- top.table$logFC
+names(ranks) <- top.table$Gene
+ranks <- sort(ranks, decreasing = T)
+
+# Preview the data table of ranks.
+DT::datatable(data.frame(ranks))
+
+# 2. Bar Plot
+# Display the ranked fold changes.
+barplot(ranks)
+```
+
+
+```{r  Pathway analysis, fig.width=10, fig.height=10 }
+
+# Set BiocParallel to use a single core to see if the problem persists
+#register(SerialParam())
+
+# 3. Conduct analysis
+# Run fgsea with 'pathwaysH' and 'ranks'.
+fgseaRes <- fgsea(pathwaysH, ranks)
+fgseaRes <- na.omit(fgseaRes)
+
+fgseaResTidy <- fgseaRes %>%
+  as_tibble() %>%
+  arrange(desc(NES)) #order by NES
+
+# Combine genes in leadingEdge with semicolons
+fgseaResTidy$leadingEdge <- sapply(fgseaResTidy$leadingEdge, paste, collapse = ";")
+fgseaResTidy <- fgseaResTidy[order(fgseaResTidy$padj), ]
+
+# Show in a Tidy table.
+head(fgseaResTidy)
+
+# Save fgseaRes as txt file.
+write.table(fgseaResTidy, "~/BHK lab/Pancreas-cancer/output data/TCGA_fgseaRes_HRank.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+# Mark "significant" if adjusted p-value <= 0.05, else "non-significant".
+fgseaResTidy$adjPvalue <- ifelse(fgseaResTidy$padj <= 0.05, "significant", "non-significant")
+
+# Define colors for significance: grey for non-significant and red for significant results.
+cols <- c("non-significant" = "grey", "significant" = "red")
+
+# Using ggplot: reorder pathways by NES, fill bars based on significance, flip coordinates for readability.
+ggplot(fgseaResTidy, aes(reorder(pathway, NES), NES, fill = adjPvalue)) + geom_col() +
+    scale_fill_manual(values = cols) + coord_flip() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    labs(x = "Pathway", y = "Normalized Enrichment Score", title = "Hallmark pathways NES
+         Enrichment Score from GSEA")
+
+# 4. GSEA Results Table Plot.
+# Plot GSEA table for significant pathways (padj < 0.05) using a GSEA parameter of 0.5.
+plotGseaTable(pathwaysH[fgseaRes$pathway[fgseaRes$padj < 0.05]], ranks, fgseaRes, gseaParam=0.5)
+```
+
+```{r  Enrichment score plot }
+# 5.  Enrichment score plot.
+
+# For significant pathways # 8 pathways.
+
+# Store the list of significant pathways (padj < 0.05).
+significant_pathways <- fgseaRes$pathway[fgseaRes$padj < 0.05]
+
+# Use a for loop to iterate and plot enrichment for each significant pathway
+for (i in significant_pathways) {
+  enrichment_plot <- plotEnrichment(pathwaysH[[i]], ranks)
+  enrichment_plot <- enrichment_plot + ggtitle(paste("Enrichment Plot for Pathway:",i))
+  print(enrichment_plot)
+}
+
+# Plot significant pathways as points with a gradient color based on p-value and size based on a 'size' variable.
+ggplot(fgseaResTidy[fgseaResTidy$padj < 0.05, ], aes(y=reorder(pathway, size),x= NES)) + geom_point(aes(color=padj,size=size)) + 
+  scale_color_gradientn(colours = c("red","blue")) + 
+  labs(x='Normalized Enrichment Score', y=NULL ) + 
+  theme( axis.title = element_text(face='bold'), axis.text = element_text (face='bold') )
+
+```
+
+## KEGG Pathway Analysis 
+
+To do KEGG pathway analysis, both KEGG_MEDICUS and KEGG_LEGACY are downloaded. The cutoff of 0.05 is applied for visualization, while the text files include the results across all gene sets.
+
+## KEGG_MEDICUS 
+
+
+```{r  KEGG plot,fig.width= 13 }
+
+# Load KEGG_MEDICUS pathways.
+pathwaysKEG<- gmtPathways("~/BHK lab/Pancreas-cancer/GSEA/c2.cp.kegg_medicus.v2023.2.Hs.symbols.gmt")
+
+# Perform fgsea with KEGG pathways
+fgseaRes_kegg <- fgsea(pathwaysKEG, ranks)
+
+# Organize and sort KEGG results by NES
+fgseaResTidy_kegg <- fgseaRes_kegg %>%
+  as_tibble() %>%
+  arrange(desc(NES))
+
+# Combine genes in leadingEdge with semicolons
+fgseaResTidy_kegg$leadingEdge <- sapply(fgseaResTidy_kegg$leadingEdge, paste, collapse = ";")
+
+# Show in a Tidy table of keg.
+head(fgseaResTidy_kegg)
+
+# Save fgseaRes_keg as txt file.
+write.table(fgseaResTidy_kegg, "~/BHK lab/Pancreas-cancer/output data/TCGA_fgseaRes_kegMEDRank.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+ 
+
+```
+no significant pathway is found based on 'padj'
+
+```{r KEGG plot ,fig.width= 12 , fig.height= 9 }
+
+
+# Mark "significant" if adjusted p-value <= 0.05, else "non-significant".
+fgseaResTidy_kegg$adjPvalue <- ifelse(fgseaResTidy_kegg$padj <= 0.05, "significant", "non-significant")  
+
+#1.1 no significant pathway is detected based on 'padj'
+
+#Create a ggplot of significant pathways, with bars colored based on adjusted p-value significance.
+ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$padj < 0.05, ], aes(reorder(pathway, NES), NES, fill = adjPvalue)) +
+  geom_col() +
+  scale_fill_manual(values = cols) +
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(x = "Pathway", y = "Normalized Enrichment Score", title = "KEGG pathways NES Enrichment Score from GSEA")
+
+
+#1.2 no significant pathway is detected based on 'pval'
+fgseaResTidy_kegg$sigpval <- ifelse(fgseaResTidy_kegg$pval <= 0.05, "significant", "non-significant")  
+
+ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$pval < 0.05, ], aes(reorder(pathway, NES), NES, fill = sigpval)) +
+  geom_col() +
+  scale_fill_manual(values = cols) +
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(x = "Pathway", y = "Normalized Enrichment Score", title = "KEGG pathways NES Enrichment Score from GSEA")
+
+
+
+```
+
+
+
+
 

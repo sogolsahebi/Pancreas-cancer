@@ -23,7 +23,6 @@ library(fgsea)
 library(msigdbr)
 library(gage)
 library(pathview)
-library(UpSetR)
 ```
 
 
@@ -158,7 +157,7 @@ EnhancedVolcano(top.table,
 
 ```{r  Create Rank and Bar pot}
 
-# Load Cholangiocarcinoma gene sets from a GMT file.
+# Load gene sets from a GMT file for pathway analysis
 pathwaysH <- gmtPathways("~/BHK lab/Pancreas-cancer/GSEA/h.all.v2023.2.Hs.symbols.gmt")
 
 # 1. Create ranks
@@ -248,7 +247,6 @@ To do KEGG pathway analysis, both KEGG_MEDICUS and KEGG_LEGACY are downloaded. T
 ## KEGG_MEDICUS 
 
 
-
 ```{r  KEGG plot,fig.width= 13 }
 
 # Load KEGG_MEDICUS pathways.
@@ -296,7 +294,6 @@ ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$padj < 0.05, ], aes(y=reorder(pathway
 
 ```
 ## KEGG_LEGACY
-
 
 
 ```{r  KEGG legacy,fig.width= 13 }
@@ -347,90 +344,12 @@ ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$padj < 0.05, ], aes(y=reorder(pathway
 
 ```
 
-## Over-Representation Analysis analysis (ORA)
-
-To identifies whether certain gene sets are over-represented in a target gene group.
-
-```{r  ORA legacy }
-
-# Defining the gene universe as all genes considered in the analysis
-geneUniverse <- rownames(expr_quantile)
-
-## Performing ORA
-
-# ORA for Hallmark pathways
-oraHallmark <- fora(pathways = pathwaysH, genes = deGenes, universe = geneUniverse, minSize = 15, maxSize = 500)
-oraHallmark$Pathway_Set <- "Hallmark"
-oraHallmark$Significance <- ifelse(oraHallmark$padj < 0.05, "Significant", "Not Significant")
-
-# ORA for KEGG_MEDICUS pathways
-oraKeggMed <- fora(pathways = pathwaysKEG, genes = deGenes, universe = geneUniverse, minSize = 15, maxSize = 500)
-oraKeggMed$Pathway_Set <- "KEGG_MEDICUS"
-oraKeggMed$Significance <- ifelse(oraKeggMed$padj < 0.05, "Significant", "Not Significant")
-
-# ORA for KEGG_LEGACY pathways
-oraKeggLeg <- fora(pathways = pathwaysKEG_LEG, genes = deGenes, universe = geneUniverse, minSize = 15, maxSize = 500)
-oraKeggLeg$Pathway_Set <- "KEGG_LEGACY"
-oraKeggLeg$Significance <- ifelse(oraKeggLeg$padj < 0.05, "Significant", "Not Significant")
-
-# Display the top results for each pathway set
-DT::datatable(oraHallmark)
-DT::datatable(oraKeggMed)
-DT::datatable(oraKeggLeg)
-
-# Save the data frame as an RDS file
-saveRDS(oraHallmark, file = "~/BHK lab/Pancreas-cancer/output data/ICGC_ORA_Hallmark.rds")
-saveRDS(oraKeggMed, file = "~/BHK lab/Pancreas-cancer/output data/ICGC_ORA_KeggMed.rds")
-saveRDS(oraKeggLeg, file = "~/BHK lab/Pancreas-cancer/output data/ICGC_ORA_KeggLeg.rds")
-
-```
-
-### Visulize ORA 
-- Heatmap 
-_ UPset plot
-
-```{r OraHallmark,fig.width= 14 , fig.height=10}
-
-# oraHallmark
-# Create an enrichment heatmap
-ggplot(oraHallmark, aes(x = pathway, y = reorder(pathway, padj), fill = -log10(padj))) +
-  geom_tile() +
-  scale_fill_gradientn(colors = c("blue", "yellow", "red"), na.value = "grey50", trans = "reverse") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(fill = "-log10(p-adj)", x = "Pathway", y = "") +
-  ggtitle("Enrichment Heatmap of Top Pathways")
 
 
-```
-
-```{r ORA keggleg ,fig.width= 14 , fig.height=10}
-
-#ORA Kegg
-
-# Create an enrichment heatmap
-ggplot(oraKeggLeg[1:50, 1:8], aes(x = pathway, y = reorder(pathway, padj), fill = -log10(padj))) +
-  geom_tile() +
-  scale_fill_gradientn(colors = c("blue", "yellow", "red"), na.value = "grey50", trans = "reverse") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(fill = "-log10(p-adj)", x = "Pathway", y = "") +
-  ggtitle("Enrichment Heatmap of Top Pathways")
 
 
-```
 
 
-```{r orakeggmed ,fig.width= 20 , fig.height=17}
 
-# Create an enrichment heatmap
-ggplot(oraKeggMed[1:50, 1:8], aes(x = pathway, y = reorder(pathway, padj), fill = -log10(padj))) +
-  geom_tile() +
-  scale_fill_gradientn(colors = c("blue", "yellow", "red"), na.value = "grey50", trans = "reverse") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(fill = "-log10(p-adj)", x = "Pathway", y = "") +
-  ggtitle("Enrichment Heatmap of Top Pathways")
 
-```
 

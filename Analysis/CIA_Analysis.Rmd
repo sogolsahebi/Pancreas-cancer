@@ -15,8 +15,16 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 ```{r  load libraries}
 library(SummarizedExperiment)
-library(EnhancedVolcano)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(DT)
 library(limma)
+library(EnhancedVolcano)
+library(fgsea)
+library(msigdbr)
+library(gage)
+library(pathview)
 ```
 
 
@@ -149,3 +157,292 @@ EnhancedVolcano(top.table,
     title= 'Volcano Plot based on FDR',)
 
 ```
+
+## MSigDB Pathway analysis
+
+- To Identify the associated pathways or genes sets.
+- Downloaded hallmark(H) , KEGG gene sets from [ MSigDB website](https://www.gsea-msigdb.org/gsea/msigdb/human/collections.jsp#H).
+- Conduct GSEA with the fgsea package using "top.table" from step 2.
+
+## Hallmark Geneset.
+
+```{r  Create Rank and Bar pot}
+
+# Load human hallmark gene sets from MSigDB
+pathwaysDF <- msigdbr("Homo sapiens", category="H")
+
+# Create a list of gene symbols for each pathway
+pathwaysH <- split(as.character(pathwaysDF$gene_symbol), pathwaysDF$gs_name)
+
+# 1. Create ranks
+
+# Create 'ranks' vector from 'top.table' with logFC as values and gene names as names.
+ranks <- top.table$logFC
+names(ranks) <- top.table$Gene
+ranks <- sort(ranks, decreasing = T)
+
+# Preview the data table of ranks.
+DT::datatable(data.frame(ranks))
+
+# 2. Bar Plot
+# Display the ranked fold changes.
+barplot(ranks)
+```
+
+
+```{r  Pathway analysis, fig.width=10, fig.height=10 }
+# 3. Conduct analysis
+# Run fgsea with 'pathwaysH' and 'ranks'.
+fgseaRes <- fgsea(pathwaysH, ranks)
+fgseaRes <- na.omit(fgseaRes)
+
+fgseaResTidy <- fgseaRes %>%
+  as_tibble() %>%
+  arrange(desc(NES)) #order by NES
+
+# Combine genes in leadingEdge with semicolons
+fgseaResTidy$leadingEdge <- sapply(fgseaResTidy$leadingEdge, paste, collapse = ";")
+fgseaResTidy <- fgseaResTidy[order(fgseaResTidy$padj), ]
+
+# Show in a Tidy table.
+head(fgseaResTidy)
+
+# Save fgseaRes as txt file.
+write.table(fgseaResTidy, "~/BHK lab/Pancreas-cancer/output data/CIA_fgseaRes_HRank.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+# Mark "significant" if adjusted p-value <= 0.05, else "non-significant".
+fgseaResTidy$adjPvalue <- ifelse(fgseaResTidy$padj <= 0.05, "significant", "non-significant")
+
+# Define colors for significance: grey for non-significant and red for significant results.
+cols <- c("non-significant" = "grey", "significant" = "red")
+
+# Using ggplot: reorder pathways by NES, fill bars based on significance, flip coordinates for readability.
+ggplot(fgseaResTidy, aes(reorder(pathway, NES), NES, fill = adjPvalue)) + geom_col() +
+    scale_fill_manual(values = cols) + coord_flip() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    labs(x = "Pathway", y = "Normalized Enrichment Score", title = "Hallmark pathways NES
+         Enrichment Score from GSEA")
+
+# 4. GSEA Results Table Plot.
+# Plot GSEA table for significant pathways (padj < 0.05) using a GSEA parameter of 0.5.
+plotGseaTable(pathwaysH[fgseaRes$pathway[fgseaRes$padj < 0.05]], ranks, fgseaRes, gseaParam=0.5)
+```
+
+```{r  Enrichment score plot }
+# 5.  Enrichment score plot.
+
+# For significant pathways # 18 pathways.
+
+# Store the list of significant pathways (padj < 0.05).
+significant_pathways <- fgseaRes$pathway[fgseaRes$padj < 0.05]
+
+# Use a for loop to iterate and plot enrichment for each significant pathway
+for (i in significant_pathways) {
+  enrichment_plot <- plotEnrichment(pathwaysH[[i]], ranks)
+  enrichment_plot <- enrichment_plot + ggtitle(paste("Enrichment Plot for Pathway:",i))
+  print(enrichment_plot)
+}
+
+# Plot significant pathways as points with a gradient color based on p-value and size based on a 'size' variable.
+ggplot(fgseaResTidy[fgseaResTidy$padj < 0.05, ], aes(y=reorder(pathway, size),x= NES)) + geom_point(aes(color=padj,size=size)) + 
+  scale_color_gradientn(colours = c("red","blue")) + 
+  labs(x='Normalized Enrichment Score', y=NULL ) + 
+  theme( axis.title = element_text(face='bold'), axis.text = element_text (face='bold') )
+
+```
+
+
+
+## KEGG Pathway Analysis 
+
+To do KEGG pathway analysis, both KEGG_MEDICUS and KEGG_LEGACY are downloaded. The cutoff of 0.05 is applied for visualization, while the text files include the results across all gene sets.
+
+## KEGG_MEDICUS 
+
+619 canonical pathways gene sets derived from the KEGG MEDICUS pathway database.
+
+```{r  KEGG plot,fig.width= 13 }
+
+# Load KEGG_MEDICUS pathways.
+pathwaysKEG <- gmtPathways("~/BHK lab/Pancreas-cancer/GSEA/c2.cp.kegg_medicus.v2023.2.Hs.symbols.gmt")
+
+# Perform fgsea with KEGG pathways
+fgseaRes_kegg <- fgsea(pathwaysKEG, ranks)
+
+# Organize and sort KEGG results by NES
+fgseaResTidy_kegg <- fgseaRes_kegg %>%
+  as_tibble() %>%
+  arrange(desc(NES))
+
+# Combine genes in leadingEdge with semicolons
+fgseaResTidy_kegg$leadingEdge <- sapply(fgseaResTidy_kegg$leadingEdge, paste, collapse = ";")
+
+# Show in a Tidy table of keg.
+head(fgseaResTidy_kegg)
+
+# Save fgseaRes_keg as txt file.
+write.table(fgseaResTidy_kegg, "~/BHK lab/Pancreas-cancer/output data/CIA_fgseaRes_kegRank.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+ 
+
+```
+
+```{r KEGG plot ,fig.width= 9 , fig.height= 6 }
+
+# Mark "significant" if adjusted p-value <= 0.05, else "non-significant".
+fgseaResTidy_kegg$adjPvalue <- ifelse(fgseaResTidy_kegg$padj <= 0.05, "significant", "non-significant")
+
+# Create a ggplot of significant pathways, with bars colored based on adjusted p-value significance.
+ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$padj < 0.05, ], aes(reorder(pathway, NES), NES, fill = adjPvalue)) + 
+  geom_col() + 
+  scale_fill_manual(values = cols) + 
+  coord_flip() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(x = "Pathway", y = "Normalized Enrichment Score", title = "KEGG pathways NES Enrichment Score from GSEA")
+
+
+# Plot significant pathways as points with a gradient color based on p-value and size based on a 'size' variable.
+ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$padj < 0.05, ], aes(y=reorder(pathway, size),x= NES)) + geom_point(aes(color=padj,size=size)) + 
+  scale_color_gradientn(colours = c("red","blue")) + 
+  labs(x='Normalized Enrichment Score', y=NULL ) + 
+  theme( axis.title = element_text(face='bold'), axis.text = element_text (face='bold') )
+
+```
+## KEGG_LEGACY
+
+186 canonical pathways gene sets derived from the KEGG pathway database. These are considered Legacy gene sets since the introduction of the gene sets based on the more recent KEGG MEDICUS data. 
+
+```{r  KEGG legacy,fig.width= 13 }
+
+# Load KEGG_MEDICUS pathways.
+pathwaysKEG_LEG <- gmtPathways("~/BHK lab/Pancreas-cancer/GSEA/c2.cp.kegg_legacy.v2023.2.Hs.symbols.gmt")
+
+# Perform fgsea with KEGG pathways
+fgseaRes_kegg <- fgsea(pathwaysKEG, ranks)
+
+# Organize and sort KEGG results by NES
+fgseaResTidy_kegg <- fgseaRes_kegg %>%
+  as_tibble() %>%
+  arrange(desc(NES))
+
+# Combine genes in leadingEdge with semicolons
+fgseaResTidy_kegg$leadingEdge <- sapply(fgseaResTidy_kegg$leadingEdge, paste, collapse = ";")
+
+# Show in a Tidy table of keg.
+head(fgseaResTidy_kegg)
+
+# Save fgseaRes_keg as txt file.
+write.table(fgseaResTidy_kegg, "~/BHK lab/Pancreas-cancer/output data/CIA_fgseaRes_KEGGRank_legacy.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+```
+
+
+```{r KEGG legacy plot,fig.width= 9 , fig.height= 6 }
+
+# Mark "significant" if adjusted p-value <= 0.05, else "non-significant".
+fgseaResTidy_kegg$adjPvalue <- ifelse(fgseaResTidy_kegg$padj <= 0.05, "significant", "non-significant")
+
+
+# Create a ggplot of significant pathways, with bars colored based on adjusted p-value significance.
+ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$padj < 0.05, ], aes(reorder(pathway, NES), NES, fill = adjPvalue)) + 
+  geom_col() + 
+  scale_fill_manual(values = cols) + 
+  coord_flip() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(x = "Pathway", y = "Normalized Enrichment Score", title = "KEGG (legacy) pathways NES Enrichment Score from GSEA")
+
+
+# Plot significant pathways as points with a gradient color based on p-value and size based on a 'size' variable.
+ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$padj < 0.05, ], aes(y=reorder(pathway, size),x= NES)) + geom_point(aes(color=padj,size=size)) + 
+  scale_color_gradientn(colours = c("red","blue")) + 
+  labs(x='Normalized Enrichment Score', y=NULL ) + 
+  theme( axis.title = element_text(face='bold'), axis.text = element_text (face='bold') )
+
+```
+
+## Over-Representation Analysis analysis (ORA)
+
+To identifies whether certain gene sets are over-represented in a target gene group.
+
+```{r  ORA legacy }
+
+# Set a vector of differentially expressed genes for ORA
+deGenes <- rownames(top.table)[top.table$adj.P.Val < 0.05]  # 1 genes
+
+# Defining the gene universe as all genes considered in the analysis
+geneUniverse <- rownames(expr_fpkm)
+
+## Performing ORA
+
+# ORA for Hallmark pathways
+oraHallmark <- fora(pathways = pathwaysH, genes = deGenes, universe = geneUniverse, minSize = 15, maxSize = 500)
+oraHallmark$Pathway_Set <- "Hallmark"
+oraHallmark$Significance <- ifelse(oraHallmark$padj < 0.05, "Significant", "Not Significant")
+
+# ORA for KEGG_MEDICUS pathways
+oraKeggMed <- fora(pathways = pathwaysKEG, genes = deGenes, universe = geneUniverse, minSize = 15, maxSize = 500)
+oraKeggMed$Pathway_Set <- "KEGG_MEDICUS"
+oraKeggMed$Significance <- ifelse(oraKeggMed$padj < 0.05, "Significant", "Not Significant")
+
+# ORA for KEGG_LEGACY pathways
+oraKeggLeg <- fora(pathways = pathwaysKEG_LEG, genes = deGenes, universe = geneUniverse, minSize = 15, maxSize = 500)
+oraKeggLeg$Pathway_Set <- "KEGG_LEGACY"
+oraKeggLeg$Significance <- ifelse(oraKeggLeg$padj < 0.05, "Significant", "Not Significant")
+
+# Display the top results for each pathway set
+# DT::datatable(head(oraHallmark, 
+#               options = list(scrollX = TRUE, scrollY = TRUE, pageLength = 4, autoWidth = TRUE))
+DT::datatable(oraHallmark)
+DT::datatable(oraKeggMed)
+DT::datatable(oraKeggLeg)
+
+
+```
+
+### Visulize ORA 
+- Heatmap 
+
+```{r OraHallmark,fig.width= 14 , fig.height=10}
+
+# oraHallmark
+# Create an enrichment heatmap
+ggplot(oraHallmark, aes(x = pathway, y = reorder(pathway, padj), fill = -log10(padj))) +
+  geom_tile() +
+  scale_fill_gradientn(colors = c("blue", "yellow", "red"), na.value = "grey50", trans = "reverse") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(fill = "-log10(p-adj)", x = "Pathway", y = "") +
+  ggtitle("Enrichment Heatmap of Top Pathways")
+
+
+```
+
+```{r ORA keggleg ,fig.width= 14 , fig.height=10}
+
+#ORA Kegg
+
+# Create an enrichment heatmap
+ggplot(oraKeggLeg[1:50, 1:8], aes(x = pathway, y = reorder(pathway, padj), fill = -log10(padj))) +
+  geom_tile() +
+  scale_fill_gradientn(colors = c("blue", "yellow", "red"), na.value = "grey50", trans = "reverse") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(fill = "-log10(p-adj)", x = "Pathway", y = "") +
+  ggtitle("Enrichment Heatmap of Top Pathways")
+
+
+```
+
+
+```{r orakeggmed ,fig.width= 20 , fig.height=17}
+
+# Create an enrichment heatmap
+ggplot(oraKeggMed[1:50, 1:8], aes(x = pathway, y = reorder(pathway, padj), fill = -log10(padj))) +
+  geom_tile() +
+  scale_fill_gradientn(colors = c("blue", "yellow", "red"), na.value = "grey50", trans = "reverse") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(fill = "-log10(p-adj)", x = "Pathway", y = "") +
+  ggtitle("Enrichment Heatmap of Top Pathways")
+
+```
+
