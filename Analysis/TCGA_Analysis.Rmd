@@ -292,22 +292,21 @@ no significant pathway is found based on 'padj'
 
 ```{r KEGG plot ,fig.width= 12 , fig.height= 9 }
 
-
-# Mark "significant" if adjusted p-value <= 0.05, else "non-significant".
-fgseaResTidy_kegg$adjPvalue <- ifelse(fgseaResTidy_kegg$padj <= 0.05, "significant", "non-significant")  
-
 #1.1 no significant pathway is detected based on 'padj'
 
-#Create a ggplot of significant pathways, with bars colored based on adjusted p-value significance.
-ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$padj < 0.05, ], aes(reorder(pathway, NES), NES, fill = adjPvalue)) +
-  geom_col() +
-  scale_fill_manual(values = cols) +
-  coord_flip() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  labs(x = "Pathway", y = "Normalized Enrichment Score", title = "KEGG pathways NES Enrichment Score from GSEA")
+# # Mark "significant" if adjusted p-value <= 0.05, else "non-significant".
+# fgseaResTidy_kegg$adjPvalue <- ifelse(fgseaResTidy_kegg$padj <= 0.05, "significant", "non-significant")  
+# 
+# #Create a ggplot of significant pathways, with bars colored based on adjusted p-value significance.
+# ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$padj < 0.05, ], aes(reorder(pathway, NES), NES, fill = adjPvalue)) +
+#   geom_col() +
+#   scale_fill_manual(values = cols) +
+#   coord_flip() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+#   labs(x = "Pathway", y = "Normalized Enrichment Score", title = "KEGG pathways NES Enrichment Score from GSEA")
 
 
-#1.2 no significant pathway is detected based on 'pval'
+#1.2 check pathway based on 'pval'
 fgseaResTidy_kegg$sigpval <- ifelse(fgseaResTidy_kegg$pval <= 0.05, "significant", "non-significant")  
 
 ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$pval < 0.05, ], aes(reorder(pathway, NES), NES, fill = sigpval)) +
@@ -317,11 +316,81 @@ ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$pval < 0.05, ], aes(reorder(pathway, 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
   labs(x = "Pathway", y = "Normalized Enrichment Score", title = "KEGG pathways NES Enrichment Score from GSEA")
 
-
+# Plot significant pathways as points with a gradient color based on p-value and size based on a 'size' variable.
+ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$pval < 0.05, ], aes(y=reorder(pathway, size),x= NES)) + geom_point(aes(color=pval,size=size)) + 
+  scale_color_gradientn(colours = c("red","blue")) + 
+  labs(x='Normalized Enrichment Score', y=NULL ) + 
+  theme( axis.title = element_text(face='bold'), axis.text = element_text (face='bold') )
 
 ```
 
+## KEGG_LEGACY
 
 
+```{r  KEGG legacy,fig.width= 13 }
 
+# Load KEGG_MEDICUS pathways.
+pathwaysKEG_LEG <- gmtPathways("~/BHK lab/Pancreas-cancer/GSEA/c2.cp.kegg_legacy.v2023.2.Hs.symbols.gmt")
+
+# Perform fgsea with KEGG pathways
+fgseaRes_kegg <- fgsea(pathwaysKEG, ranks)
+
+# Organize and sort KEGG results by NES
+fgseaResTidy_kegg <- fgseaRes_kegg %>%
+  as_tibble() %>%
+  arrange(desc(NES))
+
+# Combine genes in leadingEdge with semicolons
+fgseaResTidy_kegg$leadingEdge <- sapply(fgseaResTidy_kegg$leadingEdge, paste, collapse = ";")
+
+# Show in a Tidy table of keg.
+head(fgseaResTidy_kegg)
+
+# Save fgseaRes_keg as txt file.
+write.table(fgseaResTidy_kegg, "~/BHK lab/Pancreas-cancer/output data/TCGA_fgseaRes_keggLEGRank.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+
+```
+
+no significant pathway based on 'padj' 
+
+```{r KEGG legacy plot,fig.width= 12 , fig.height= 8 }
+
+# Mark "significant" if adjusted p-value <= 0.05, else "non-significant".
+fgseaResTidy_kegg$adjPvalue <- ifelse(fgseaResTidy_kegg$padj <= 0.05, "significant", "non-significant")
+
+#1.1 no significant pathway based on 'padj'
+
+# Create a ggplot of significant pathways, with bars colored based on adjusted p-value significance.
+# ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$padj < 0.05, ], aes(reorder(pathway, NES), NES, fill = adjPvalue)) + 
+#   geom_col() + 
+#   scale_fill_manual(values = cols) + 
+#   coord_flip() + 
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+#   labs(x = "Pathway", y = "Normalized Enrichment Score", title = "KEGG (legacy) pathways NES Enrichment Score from GSEA")
+# 
+# 
+# # Plot significant pathways as points with a gradient color based on p-value and size based on a 'size' variable.
+# ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$padj < 0.05, ], aes(y=reorder(pathway, size),x= NES)) + geom_point(aes(color=padj,size=size)) + 
+#   scale_color_gradientn(colours = c("red","blue")) + 
+#   labs(x='Normalized Enrichment Score', y=NULL ) + 
+#   theme( axis.title = element_text(face='bold'), axis.text = element_text (face='bold') )
+
+#1.2 check  significant pathway based on 'pval'
+
+fgseaResTidy_kegg$sigpval <- ifelse(fgseaResTidy_kegg$pval <= 0.05, "significant", "non-significant")  
+
+ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$pval < 0.05, ], aes(reorder(pathway, NES), NES, fill = sigpval)) +
+  geom_col() +
+  scale_fill_manual(values = cols) +
+  coord_flip() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(x = "Pathway", y = "Normalized Enrichment Score", title = "KEGG pathways NES Enrichment Score from GSEA")
+
+# Plot significant pathways as points with a gradient color based on p-value and size based on a 'size' variable.
+ggplot(fgseaResTidy_kegg[fgseaResTidy_kegg$pval < 0.05, ], aes(y=reorder(pathway, size),x= NES)) + geom_point(aes(color=pval,size=size)) + 
+  scale_color_gradientn(colours = c("red","blue")) + 
+  labs(x='Normalized Enrichment Score', y=NULL ) + 
+  theme( axis.title = element_text(face='bold'), axis.text = element_text (face='bold') )
+
+```
 

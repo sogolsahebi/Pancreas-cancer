@@ -331,7 +331,7 @@ fgseaResTidy_kegg$leadingEdge <- sapply(fgseaResTidy_kegg$leadingEdge, paste, co
 head(fgseaResTidy_kegg)
 
 # Save fgseaRes_keg as txt file.
-write.table(fgseaResTidy_kegg, "~/BHK lab/Pancreas-cancer/output data/CIA_fgseaRes_KEGGRank_legacy.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(fgseaResTidy_kegg, "~/BHK lab/Pancreas-cancer/output data/CIA_fgseaRes_keggLEGRank.txt", sep = "\t", row.names = FALSE, quote = FALSE)
 
 ```
 
