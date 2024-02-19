@@ -286,7 +286,7 @@ write.table(fgseaResTidy_kegg, "~/BHK lab/Pancreas-cancer/output data/CIA_fgseaR
 
 ```
 
-```{r KEGG plot ,fig.width= 9 , fig.height= 6 }
+```{r KEGG plot2 ,fig.width= 12 , fig.height= 8 }
 
 # Mark "significant" if adjusted p-value <= 0.05, else "non-significant".
 fgseaResTidy_kegg$adjPvalue <- ifelse(fgseaResTidy_kegg$padj <= 0.05, "significant", "non-significant")
@@ -336,7 +336,7 @@ write.table(fgseaResTidy_kegg, "~/BHK lab/Pancreas-cancer/output data/CIA_fgseaR
 ```
 
 
-```{r KEGG legacy plot,fig.width= 9 , fig.height= 6 }
+```{r KEGG legacy plot,fig.width= 12 , fig.height= 8}
 
 # Mark "significant" if adjusted p-value <= 0.05, else "non-significant".
 fgseaResTidy_kegg$adjPvalue <- ifelse(fgseaResTidy_kegg$padj <= 0.05, "significant", "non-significant")

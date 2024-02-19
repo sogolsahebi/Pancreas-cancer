@@ -8,6 +8,7 @@
 
 # load libraries 
 library(SummarizedExperiment)
+library(data.table)
 
 # Read the clinical CSV file for 3 studies
 separate_clin <- read.csv("files/train_tune_with_quantile.csv")
@@ -16,10 +17,13 @@ separate_clin <- read.csv("files/train_tune_with_quantile.csv")
 clin <- separate_clin[separate_clin$cohort == "cia",]
 
 # Clean slide_id in clin
-clin$slide_id <- gsub("-[^-]+$", "", clin$slide_id)
+clin$slide_id_copy <- gsub("-[^-]+$", "", clin$slide_id)
 
-# Read expression file of CIA study
-expr <- data.frame(read.table("files/ALL_RNA-Seq_Expr_WashU_FPKM.tsv", header = TRUE, sep = "\t")) # dim 60483 x 1472
+# Optionally, convert the data.table to a data.frame if needed
+expr <- as.data.frame(fread("files/ALL_RNA-Seq_Expr_WashU_FPKM.tsv")) # dim 60483 x 1472
+
+# Only matching samples with '-T' at the end. 
+colnames(expr) <- sub("-T$", "", colnames(expr))
 
 # Remove duplicate gene_names
 expr<- expr[!duplicated(expr$gene_name), ] # dim 58387 x 1472
@@ -27,15 +31,12 @@ expr<- expr[!duplicated(expr$gene_name), ] # dim 58387 x 1472
 # Store the gene_names for later
 gene_row <- expr$gene_name
 
+# Filter columns of expr based clin$slide_id
+expr <- expr[, colnames(expr) %in% clin$slide_id_copy] # dim 58387 x 50
+
 # Convert to log(expr + 1)
 expr <- apply(apply(expr,2,as.character),2,as.numeric)
 expr <- log2(expr + 1)
-
-# Clean 'expr' colnames: Remove 'X', replace '.T' & '.', with nothing & '-', respectively
-colnames(expr) <- gsub("\\.", "-", gsub("\\.T$", "", gsub("^X", "", colnames(expr))))
-
-# Filter columns of expr based clin$slide_id
-expr <- expr[, colnames(expr) %in% clin$slide_id] # dim 58387 x 50
 
 # Set expr rownames
 rownames(expr) <- gene_row
@@ -59,7 +60,12 @@ rownames(assay_genes) <- assay_genes$gene_name
 assay_genes <- assay_genes[order(rownames(assay_genes)), ]  # Dimension 51627 x 15
 
 # Keep clin slide IDs that match with expr column names
-clin <- clin[clin$slide_id %in% colnames(expr), ]
+clin <- clin[clin$slide_id_copy %in% colnames(expr), ]
+
+rownames(clin) = clin$slide_id_copy
+patient = intersect( colnames(expr) , rownames(clin) )
+clin = clin[ patient , ]
+expr = expr[ , patient ]
 
 # Create a SummarizedExperiment object for CIA
 cia_se <- SummarizedExperiment(assays = list("gene_expression" = assay), colData = clin, rowData = assay_genes)
